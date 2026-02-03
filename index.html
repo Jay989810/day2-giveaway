@@ -268,7 +268,7 @@
             { id: 30, text: "YOUR DEPARTMENT ACRONYM?", ans: ["NARES"] }
         ];
 
-        const TIME_LIMIT = 5; // Seconds per question
+        const TIME_LIMIT = 15; // Seconds per question
         const PASS_SCORE = 24; // 80% of 30
 
         // --- STATE ---
@@ -332,15 +332,32 @@
         }
 
         async function startGame() {
+            // --- MAX ATTEMPTS LOGIC ---
+            const ATTEMPT_KEY = 'nares_attempts_v3';
+            const MAX_ATTEMPTS = 2; // 1 initial + 1 retry
+            let attempts = parseInt(localStorage.getItem(ATTEMPT_KEY) || '0');
+
+            if (attempts >= MAX_ATTEMPTS) {
+                document.body.style.backgroundColor = '#200';
+                appendLine("MAXIMUM ATTEMPTS REACHED.", "text-red");
+                appendLine("SYSTEM LOCKED. YOU CANNOT PARTICIPATE AGAIN.", "text-red");
+                return;
+            }
+
             appendLine("NARES SPEED CHALLENGE SYSTEM V2.0", "text-green");
             appendLine("---------------------------------");
-            appendLine("30 QUESTIONS. 5 SECONDS EACH.", "text-warn");
+            appendLine(`ATTEMPT: ${attempts + 1}/${MAX_ATTEMPTS}`, "text-warn");
+            appendLine("30 QUESTIONS. 15 SECONDS EACH.", "text-warn");
             appendLine("PASS MARK: 80% (24/30).", "text-warn");
             appendLine("CLICK ANYWHERE START.", "text-green");
 
             const start = () => {
                 document.removeEventListener('click', start);
                 document.removeEventListener('keydown', start);
+
+                // Register attempt on start
+                localStorage.setItem(ATTEMPT_KEY, attempts + 1);
+
                 initAudio();
                 clearScreen();
                 loadStage(0);
@@ -471,11 +488,21 @@
                 appendLine("YOU DID NOT REACH THE 80% THRESHOLD.", "text-red");
                 appendLine("PLEASE TRY AGAIN.", "text-warn");
 
-                const retryBtn = document.createElement('div');
-                retryBtn.className = "claim-btn";
-                retryBtn.textContent = "RETRY CHALLENGE";
-                retryBtn.onclick = () => location.reload();
-                outputEl.appendChild(retryBtn);
+                const ATTEMPT_KEY = 'nares_attempts_v3';
+                const MAX_ATTEMPTS = 2;
+                let attempts = parseInt(localStorage.getItem(ATTEMPT_KEY) || '0');
+
+                if (attempts < MAX_ATTEMPTS) {
+                    appendLine(`ATTEMPTS REMAINING: ${MAX_ATTEMPTS - attempts}`, "text-warn");
+                    const retryBtn = document.createElement('div');
+                    retryBtn.className = "claim-btn";
+                    retryBtn.textContent = "RETRY CHALLENGE";
+                    retryBtn.onclick = () => location.reload();
+                    outputEl.appendChild(retryBtn);
+                } else {
+                    appendLine("MAXIMUM ATTEMPTS EXCEEDED.", "text-red");
+                    appendLine("SYSTEM ACCESS REVOKED.", "text-red");
+                }
             }
         }
 
