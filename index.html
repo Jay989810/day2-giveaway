@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NARES BLACK BOX TERMINAL</title>
+    <title>NARES SPEED CHALLENGE</title>
     <style>
         :root {
             --bg-color: #050505;
             --term-color: #0f0;
             --error-color: #f00;
+            --warn-color: #fa0;
             --glow-color: rgba(0, 255, 0, 0.5);
-            --scanline-color: rgba(0, 0, 0, 0.5);
             --font-stack: 'Courier New', Courier, monospace;
         }
 
@@ -65,26 +65,39 @@
             }
         }
 
-        /* Terminal Container */
-        #terminal {
-            padding: 20px;
-            width: 100%;
-            height: 100%;
+        /* Layout */
+        #game-container {
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
-            overflow-y: auto;
+            height: 100%;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Header / Stats */
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--term-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            font-weight: bold;
             text-shadow: 0 0 5px var(--glow-color);
         }
 
-        /* Scrollbar hiding */
-        #terminal::-webkit-scrollbar {
-            display: none;
+        /* Terminal Area */
+        #terminal {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            text-shadow: 0 0 3px var(--glow-color);
         }
 
-        #terminal {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        #terminal::-webkit-scrollbar {
+            display: none;
         }
 
         .line {
@@ -94,9 +107,11 @@
             line-height: 1.4;
         }
 
+        /* Input Area */
         .input-line {
             display: flex;
             align-items: center;
+            margin-top: 10px;
         }
 
         .prompt {
@@ -125,6 +140,22 @@
             }
         }
 
+        /* Timer Bar */
+        #timer-container {
+            width: 100%;
+            height: 4px;
+            background: #222;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #timer-bar {
+            width: 100%;
+            height: 100%;
+            background: var(--term-color);
+            transition: width 0.1s linear;
+        }
+
         /* Hidden Input */
         #cmd-input {
             position: absolute;
@@ -132,19 +163,17 @@
             top: -1000px;
         }
 
-        /* Text Colors */
+        /* Colors */
         .text-green {
             color: var(--term-color);
         }
 
         .text-red {
             color: var(--error-color);
-            text-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
         }
 
-        .text-yellow {
-            color: #ff0;
-            text-shadow: 0 0 5px rgba(255, 255, 0, 0.5);
+        .text-warn {
+            color: var(--warn-color);
         }
 
         /* Victory Button */
@@ -155,13 +184,11 @@
             color: var(--term-color);
             padding: 15px 30px;
             text-decoration: none;
-            font-family: var(--font-stack);
             font-weight: bold;
-            text-transform: uppercase;
             background: transparent;
             cursor: pointer;
             box-shadow: 0 0 10px var(--glow-color);
-            transition: all 0.3s ease;
+            text-align: center;
         }
 
         .claim-btn:hover {
@@ -169,13 +196,12 @@
             color: #000;
         }
 
-        /* Mobile Adjustments */
         @media (max-width: 600px) {
             body {
                 font-size: 14px;
             }
 
-            #terminal {
+            #game-container {
                 padding: 10px;
             }
         }
@@ -183,13 +209,24 @@
 </head>
 
 <body>
-
     <div class="crt-overlay"></div>
-    <div id="terminal" class="crt-flicker">
-        <div id="output"></div>
-        <div class="input-line" id="input-line" style="display:none;">
-            <span class="prompt">NARES_MEMBER@TERM:~$</span>
-            <span id="user-typed"></span><span class="cursor"></span>
+
+    <div id="game-container" class="crt-flicker">
+        <div id="hud">
+            <span id="score-display">SCORE: 00/30</span>
+            <span id="time-display">READY</span>
+        </div>
+
+        <div id="terminal">
+            <div id="output"></div>
+            <div class="input-line" id="input-line" style="display:none;">
+                <span class="prompt">ANSWER ></span>
+                <span id="user-typed"></span><span class="cursor"></span>
+            </div>
+        </div>
+
+        <div id="timer-container">
+            <div id="timer-bar"></div>
         </div>
     </div>
 
@@ -197,111 +234,83 @@
         autofocus>
 
     <script>
-        // --- CONSTANTS & CONFIG ---
-        const MAX_ATTEMPTS = 3;
-        const STORAGE_KEY = 'nares_blackbox_attempts_v2';
-
+        // --- DATA ---
         const STAGES = [
-            { id: 1, text: "INITIATING... INPUT THE FULL MEANING OF 'NRC' (THE NATIONAL OPERATOR).", ans: ["NIGERIAN RAILWAY CORPORATION"] },
-            { id: 2, text: "WHAT COMPONENT ARE THE STEEL RAILS LAID UPON? (STARTS WITH S).", ans: ["SLEEPERS", "SLEEPER"] },
-            { id: 3, text: "A TRAIN TRAVELS 100KM IN 1 HOUR. WHAT IS ITS SPEED IN KM/H?", ans: ["100"] },
-            { id: 4, text: "WHAT COLOR SIGNAL INDICATES 'DANGER' OR 'STOP'?", ans: ["RED"] },
-            { id: 5, text: "ENTER THE STANDARD GAUGE WIDTH IN MM.", ans: ["1435"] },
-            { id: 6, text: "WHO IS THE PERSON THAT DRIVES THE LOCOMOTIVE?", ans: ["DRIVER", "LOCO PILOT", "PILOT"] },
-            { id: 7, text: "WHAT DEVICE IS USED TO CHANGE THE TRAIN FROM ONE TRACK TO ANOTHER?", ans: ["SWITCH", "POINT", "POINTS"] },
-            { id: 8, text: "TO STOP THE TRAIN, YOU APPLY THE...?", ans: ["BRAKES", "BRAKE"] },
-            { id: 9, text: "THE MAJOR STANDARD GAUGE LINE CONNECTS LAGOS TO WHICH CITY?", ans: ["IBADAN"] },
-            { id: 10, text: "WHAT IS THE METAL PART THE TRAIN WHEELS ROLL ON CALLED?", ans: ["RAIL", "TRACK", "STEEL RAIL"] },
-            { id: 11, text: "A PLACE WHERE TRAINS LOAD AND UNLOAD PASSENGERS IS CALLED A...?", ans: ["STATION", "TERMINAL"] },
-            { id: 12, text: "ENTER YOUR ASSOCIATION ACRONYM.", ans: ["NARES"] }
+            { id: 1, text: "NRC STANDS FOR?", ans: ["NIGERIAN RAILWAY CORPORATION"] },
+            { id: 2, text: "WHAT ARE RAILS LAID ON? (STARTS WITH S)", ans: ["SLEEPERS", "SLEEPER"] },
+            { id: 3, text: "SPEED = DISTANCE DIVIDED BY?", ans: ["TIME"] },
+            { id: 4, text: "COLOR OF STOP SIGNAL?", ans: ["RED"] },
+            { id: 5, text: "STANDARD GAUGE WIDTH (MM)?", ans: ["1435"] },
+            { id: 6, text: "PERSON WHO DRIVES THE TRAIN?", ans: ["DRIVER", "LOCO PILOT", "PILOT"] },
+            { id: 7, text: "DEVICE TO SWITCH TRACKS?", ans: ["SWITCH", "POINT", "POINTS"] },
+            { id: 8, text: "OPPOSITE OF ACCELERATION?", ans: ["DECELERATION", "BRAKING"] },
+            { id: 9, text: "LAGOS-IBADAN LINE IS WHAT CAGE?", ans: ["STANDARD", "STANDARD GAUGE"] },
+            { id: 10, text: "WHEELS ROLL ON WHAT?", ans: ["RAIL", "TRACKS", "RAILS", "STEEL RAILS"] },
+            { id: 11, text: "PASSENGERS BOARD AT A?", ans: ["STATION", "TERMINAL"] },
+            { id: 12, text: "NARES STANDS FOR NIGERIAN ASSOCIATION OF RAILWAY...?", ans: ["ENGINEERING STUDENTS"] },
+            { id: 13, text: "FORCE = MASS X ?", ans: ["ACCELERATION"] },
+            { id: 14, text: "UNIT OF ELECTRIC CURRENT?", ans: ["AMPERE", "AMP"] },
+            { id: 15, text: "TRAIN THAT CARRIES GOODS?", ans: ["FREIGHT", "CARGO"] },
+            { id: 16, text: "TRAINS RUN ON ROAD OR TRACK?", ans: ["TRACK", "TRACKS"] },
+            { id: 17, text: "POWER SOURCE FOR ELECTRIC TRAINS?", ans: ["ELECTRICITY", "POWER", "CATENARY"] },
+            { id: 18, text: "UNIT OF VOLTAGE?", ans: ["VOLT", "VOLTS"] },
+            { id: 19, text: "LOCOMOTIVE PULLS THE...?", ans: ["TRAIN", "COACHES", "WAGONS"] },
+            { id: 20, text: "GAP BETWEEN RAILS IS CALLED?", ans: ["GAUGE"] },
+            { id: 21, text: "STRUCTURE CARRYING TRAIN OVER WATER?", ans: ["BRIDGE"] },
+            { id: 22, text: "UNDERGROUND RAILWAY PASSAGE?", ans: ["TUNNEL"] },
+            { id: 23, text: "TICKET INSPECTOR IS CALLED?", ans: ["CONDUCTOR", "TICKET CHECKER"] },
+            { id: 24, text: "SYMBOL FOR IRON?", ans: ["FE"] },
+            { id: 25, text: "3.14 IS APPROX VALUE OF?", ans: ["PI"] },
+            { id: 26, text: "H2O IS COMMON NAME FOR?", ans: ["WATER"] },
+            { id: 27, text: "BINARY FOR 2?", ans: ["10"] },
+            { id: 28, text: "DOES A MAGLEV TOUCH THE TRACK? (YES/NO)", ans: ["NO"] },
+            { id: 29, text: "APPROX GRAVITY VALUE (M/S^2)?", ans: ["9.8", "10", "9.81"] },
+            { id: 30, text: "YOUR DEPARTMENT ACRONYM?", ans: ["NARES"] }
         ];
+
+        const TIME_LIMIT = 5; // Seconds per question
+        const PASS_SCORE = 24; // 80% of 30
 
         // --- STATE ---
         let currentStageIndex = 0;
+        let score = 0;
+        let timeLeft = 0;
+        let timerInterval = null;
         let isTyping = false;
         let isGameOver = false;
-        let isVictory = false;
-        let isTransitioning = false;
         let audioCtx;
 
-        // --- DOM ELEMENTS ---
+        // --- ELEMENTS ---
         const terminalEl = document.getElementById('terminal');
         const outputEl = document.getElementById('output');
         const inputLineEl = document.getElementById('input-line');
         const userTypedEl = document.getElementById('user-typed');
         const cmdInput = document.getElementById('cmd-input');
+        const scoreEl = document.getElementById('score-display');
+        const timeEl = document.getElementById('time-display');
+        const timerBar = document.getElementById('timer-bar');
+        const timerContainer = document.getElementById('timer-container');
 
-        // --- AUDIO SYSTEM ---
+        // --- AUDIO ---
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new AudioContext();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
         }
-
-        function playTone(freq, type, duration) {
-            if (!audioCtx) initAudio();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + duration);
+        function playTone(f, t, d) {
+            if (!audioCtx) return;
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = t; o.frequency.value = f;
+            g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + d);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
         }
+        function playCorrect() { playTone(800, 'sine', 0.1); }
+        function playWrong() { playTone(150, 'sawtooth', 0.3); }
 
-        function playBeep() {
-            playTone(1200, 'sine', 0.08);
-        }
-
-        function playError() {
-            playTone(100, 'sawtooth', 0.4);
-        }
-
-        // --- SECURITY SYSTEM ---
-        function getAttempts() {
-            return parseInt(localStorage.getItem(STORAGE_KEY) || '0');
-        }
-
-        function incrementAttempts() {
-            let attempts = getAttempts();
-            attempts++;
-            localStorage.setItem(STORAGE_KEY, attempts);
-            return attempts;
-        }
-
-        function checkLockout() {
-            if (getAttempts() >= MAX_ATTEMPTS) {
-                showRedScreen("SECURITY LOCKOUT. MAX ATTEMPTS EXCEEDED. YOU ARE BANNED.");
-                return true;
-            }
-            return false;
-        }
-
-        function handleCheating() {
-            if (isGameOver || isVictory) return;
-
-            incrementAttempts();
-            playError();
-            showRedScreen("CONNECTION LOST. FOCUS CHANGE DETECTED.");
-        }
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                if (currentStageIndex >= 0 && !isGameOver && !isVictory) {
-                    handleCheating();
-                }
-            }
-        });
-
-        // --- UI DRAWING & TYPEWRITER ---
+        // --- ENGINE ---
         function clearScreen() {
             outputEl.innerHTML = '';
             userTypedEl.textContent = '';
@@ -309,181 +318,183 @@
         }
 
         function appendLine(text, className = 'text-green') {
-            const div = document.createElement('div');
-            div.className = `line ${className}`;
-            outputEl.appendChild(div);
+            const d = document.createElement('div');
+            d.className = `line ${className}`;
+            d.textContent = text;
+            outputEl.appendChild(d);
             terminalEl.scrollTop = terminalEl.scrollHeight;
-            return div;
+            return d;
         }
 
-        function typeText(text, className = 'text-green', speed = 25) {
-            return new Promise((resolve) => {
-                isTyping = true;
-                const div = appendLine('', className);
-                let i = 0;
-
-                function typeChar() {
-                    if (i < text.length) {
-                        div.textContent += text.charAt(i);
-                        i++;
-                        terminalEl.scrollTop = terminalEl.scrollHeight;
-                        setTimeout(typeChar, speed);
-                    } else {
-                        isTyping = false;
-                        resolve();
-                    }
-                }
-                typeChar();
-            });
+        function updateHUD(time) {
+            scoreEl.textContent = `SCORE: ${score}/${STAGES.length}`;
+            if (time !== undefined) timeEl.textContent = `TIME: ${time.toFixed(1)}s`;
         }
 
-        function showRedScreen(msg) {
-            isGameOver = true;
-            document.body.style.backgroundColor = '#100';
-            document.body.style.color = '#f00';
-            const allElements = document.querySelectorAll('*');
-            allElements.forEach(el => {
-                el.style.color = '#f00';
-                el.style.borderColor = '#f00';
-            });
-
-            terminalEl.innerHTML = '';
-            const container = document.createElement('div');
-            container.style.position = 'absolute';
-            container.style.top = '50%';
-            container.style.left = '50%';
-            container.style.transform = 'translate(-50%, -50%)';
-            container.style.textAlign = 'center';
-            container.style.width = '90%';
-
-            container.innerHTML = `
-                <h1 style="color:red; text-shadow:0 0 10px red; margin-bottom: 20px;">${msg}</h1>
-                <p style="font-size: 1.2em;">SYSTEM ACCESS PERMANENTLY REVOKED.</p>
-                <p style="margin-top:20px; font-size: 0.8em; opacity: 0.7;">STRIKE ${getAttempts()}/${MAX_ATTEMPTS}</p>
-            `;
-            document.body.appendChild(container);
-
-            cmdInput.disabled = true;
-        }
-
-        // --- GAME LOGIC ---
         async function startGame() {
-            if (checkLockout()) return;
+            appendLine("NARES SPEED CHALLENGE SYSTEM V2.0", "text-green");
+            appendLine("---------------------------------");
+            appendLine("30 QUESTIONS. 5 SECONDS EACH.", "text-warn");
+            appendLine("PASS MARK: 80% (24/30).", "text-warn");
+            appendLine("CLICK ANYWHERE START.", "text-green");
 
-            appendLine("Click or press any key to initialize system...", "text-green");
-
-            const startHandler = () => {
-                document.removeEventListener('click', startHandler);
-                document.removeEventListener('keydown', startHandler);
+            const start = () => {
+                document.removeEventListener('click', start);
+                document.removeEventListener('keydown', start);
                 initAudio();
                 clearScreen();
                 loadStage(0);
             };
-
-            document.addEventListener('click', startHandler);
-            document.addEventListener('keydown', startHandler);
+            document.addEventListener('click', start);
+            document.addEventListener('keydown', start);
         }
 
-        async function loadStage(index) {
-            currentStageIndex = index;
-            if (index >= STAGES.length) {
-                handleVictory();
+        function startTimer() {
+            timeLeft = TIME_LIMIT;
+            timerContainer.style.display = 'block';
+            updateHUD(timeLeft);
+
+            clearInterval(timerInterval);
+            const startTime = Date.now();
+
+            timerInterval = setInterval(() => {
+                const elapsed = (Date.now() - startTime) / 1000;
+                timeLeft = Math.max(0, TIME_LIMIT - elapsed);
+                updateHUD(timeLeft);
+
+                // Visual Bar
+                const pct = (timeLeft / TIME_LIMIT) * 100;
+                timerBar.style.width = `${pct}%`;
+                timerBar.style.backgroundColor = pct < 30 ? '#f00' : '#0f0';
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeOut();
+                }
+            }, 50);
+        }
+
+        function handleTimeOut() {
+            playWrong();
+            appendLine(`TIMEOUT! ANSWER WAS: ${STAGES[currentStageIndex].ans[0]}`, "text-red");
+            nextStage();
+        }
+
+        function nextStage() {
+            setTimeout(() => {
+                loadStage(currentStageIndex + 1);
+            }, 1000);
+        }
+
+        function loadStage(idx) {
+            currentStageIndex = idx;
+            clearInterval(timerInterval);
+            timerContainer.style.display = 'none';
+
+            if (idx >= STAGES.length) {
+                endGame();
                 return;
             }
 
-            const stage = STAGES[index];
-            inputLineEl.style.display = 'none';
+            // Display
+            clearScreen(); // One question at a time focus
+            const stage = STAGES[idx];
 
-            await typeText(`STAGE ${stage.id}: ${stage.text}`);
+            const qDiv = document.createElement('div');
+            qDiv.className = 'line text-green';
+            qDiv.style.fontSize = '1.2em';
+            qDiv.style.marginBottom = '20px';
+            qDiv.textContent = `Q${idx + 1}: ${stage.text}`;
+            outputEl.appendChild(qDiv);
 
             userTypedEl.textContent = '';
             cmdInput.value = '';
             inputLineEl.style.display = 'flex';
             cmdInput.focus();
-            isTransitioning = false;
+            cmdInput.disabled = false;
+
+            startTimer();
         }
 
-        async function handleVictory() {
-            isVictory = true;
-            clearScreen();
-            playBeep();
+        function handleInput(val) {
+            clearInterval(timerInterval);
+            cmdInput.disabled = true; // Prevent double submit
 
-            await typeText("ACCESS GRANTED. SYSTEM UNLOCKED.", "text-green");
-
-            const randomHex = Math.floor(Math.random() * 16777215).toString(16).toUpperCase().padStart(6, '0');
-            const hash = `USD-NARES-${randomHex}`;
-
-            await typeText(`GENERATING REWARD HASH... ${hash}`, "text-yellow");
-            await typeText("...", "text-green");
-
-            const claimUrl = `https://wa.me/2347089799407?text=${encodeURIComponent(`I cracked the Black Box! My Key: ${hash}. Claiming the reward.`)}`;
-
-            const btn = document.createElement('a');
-            btn.href = claimUrl;
-            btn.target = "_blank";
-            btn.className = "claim-btn";
-            btn.innerText = "CLAIM DOLLAR REWARD";
-
-            outputEl.appendChild(btn);
-            terminalEl.scrollTop = terminalEl.scrollHeight;
-        }
-
-        async function handleInput(inputVal) {
-            if (isTyping || isTransitioning || isGameOver) return;
-
-            const normalized = inputVal.trim().toUpperCase().replace(/\s+/g, ' ');
+            const normalized = val.trim().toUpperCase().replace(/\s+/g, ' ');
             const stage = STAGES[currentStageIndex];
 
-            inputLineEl.style.display = 'none';
-            appendLine(`NARES_MEMBER@TERM:~$ ${normalized}`, "text-green");
-
-            isTransitioning = true;
+            appendLine(`> ${normalized}`, "text-green");
 
             const isCorrect = stage.ans.includes(normalized);
-
             if (isCorrect) {
-                playBeep();
-                setTimeout(() => {
-                    clearScreen();
-                    loadStage(currentStageIndex + 1);
-                }, 400);
+                playCorrect();
+                appendLine("CORRECT", "text-green");
+                score++;
             } else {
-                playError();
-                await typeText("ACCESS DENIED.", "text-red");
+                playWrong();
+                appendLine(`WRONG. ANSWER: ${stage.ans[0]}`, "text-red");
+            }
 
-                incrementAttempts();
+            updateHUD();
+            nextStage();
+        }
 
-                setTimeout(() => {
-                    // Strict Mode: Session End
-                    if (getAttempts() >= MAX_ATTEMPTS) {
-                        checkLockout();
-                    } else {
-                        // Not banned yet, but session is over
-                        appendLine("SESSION TERMINATED DUE TO ERROR.", "text-red");
-                        appendLine("PRESS REFRESH TO TRY AGAIN.", "text-yellow");
-                        cmdInput.disabled = true;
-                    }
-                }, 800);
+        function endGame() {
+            clearScreen();
+            inputLineEl.style.display = 'none';
+            timeEl.textContent = "FINISHED";
+
+            const passed = score >= PASS_SCORE;
+            const color = passed ? "text-green" : "text-red";
+
+            appendLine(`FINAL SCORE: ${score}/30`, color);
+            appendLine(`PERCENTAGE: ${Math.floor((score / 30) * 100)}%`, color);
+
+            if (passed) {
+                appendLine("CONGRATULATIONS! YOU PASSED.", "text-green");
+                playCorrect();
+
+                const randomHex = Math.floor(Math.random() * 16777215).toString(16).toUpperCase().padStart(6, '0');
+                const hash = `NARES-WIN-${randomHex}`;
+
+                appendLine(`REWARD HASH: ${hash}`, "text-warn");
+
+                const claimUrl = `https://wa.me/2347089799407?text=${encodeURIComponent(`I beat the NARES Speed Challenge! Score: ${score}/30. Key: ${hash}`)}`;
+
+                const btn = document.createElement('a');
+                btn.href = claimUrl;
+                btn.className = "claim-btn";
+                btn.textContent = "CLAIM REWARD ON WHATSAPP";
+                btn.target = "_blank";
+                outputEl.appendChild(btn);
+            } else {
+                appendLine("YOU DID NOT REACH THE 80% THRESHOLD.", "text-red");
+                appendLine("PLEASE TRY AGAIN.", "text-warn");
+
+                const retryBtn = document.createElement('div');
+                retryBtn.className = "claim-btn";
+                retryBtn.textContent = "RETRY CHALLENGE";
+                retryBtn.onclick = () => location.reload();
+                outputEl.appendChild(retryBtn);
             }
         }
 
-        // --- INPUT EVENT LISTENERS ---
-
-        document.addEventListener('click', () => {
-            if (!isGameOver && !cmdInput.disabled) cmdInput.focus();
-        });
-
-        cmdInput.addEventListener('input', (e) => {
-            userTypedEl.textContent = cmdInput.value.toUpperCase();
-        });
-
+        // Logic
         cmdInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !cmdInput.disabled) {
                 handleInput(cmdInput.value);
             }
         });
 
-        // Initialize
+        cmdInput.addEventListener('input', () => {
+            userTypedEl.textContent = cmdInput.value.toUpperCase();
+        });
+
+        document.addEventListener('click', () => {
+            if (inputLineEl.style.display !== 'none') cmdInput.focus();
+        });
+
+        // Start
         startGame();
 
     </script>
